@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef, FC } from 'react';
 import Navbar from './components/Navbar';
 import SkillBadge from './components/SkillBadge';
 import { currentUser as initialUser, peers, resources as initialResources, requests, initialMessages } from './mockData';
-import { User, Match, Resource, TeachingRequest, Message } from './types';
+import { User, Match, Resource, TeachingRequest, Message, RedemptionRecord } from './types';
 import { getAIPeerInsight, generateLessonPlan } from './services/geminiService';
 
 // --- Sub-components defined outside to ensure stable mounting ---
@@ -253,7 +253,6 @@ const AuthScreen: FC<{
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        {/* Google / Multi-color G */}
         <button className="flex justify-center items-center py-4 bg-white border-2 border-slate-50 rounded-2xl hover:bg-slate-50 transition-colors shadow-sm group">
           <svg className="w-5 h-5 transition-transform group-hover:scale-110" viewBox="0 0 24 24">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -262,13 +261,11 @@ const AuthScreen: FC<{
             <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 12-4.53z" fill="#EA4335"/>
           </svg>
         </button>
-        {/* Facebook Branded Blue */}
         <button className="flex justify-center items-center py-4 bg-white border-2 border-slate-50 rounded-2xl hover:bg-slate-50 transition-colors shadow-sm group">
           <svg className="w-5 h-5 transition-transform group-hover:scale-110" fill="#1877F2" viewBox="0 0 24 24">
             <path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c5.05-.5 9-4.76 9-9.95z"/>
           </svg>
         </button>
-        {/* LinkedIn Branded Blue */}
         <button className="flex justify-center items-center py-4 bg-white border-2 border-slate-50 rounded-2xl hover:bg-slate-50 transition-colors shadow-sm group">
           <svg className="w-5 h-5 transition-transform group-hover:scale-110" fill="#0A66C2" viewBox="0 0 24 24">
             <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/>
@@ -322,6 +319,12 @@ const App: React.FC = () => {
   const [allResources, setAllResources] = useState<Resource[]>(initialResources);
   const [isPublishing, setIsPublishing] = useState(false);
   
+  // Profile sub-tabs
+  const [profileTab, setProfileTab] = useState<'overview' | 'history'>('overview');
+
+  const [customTeachSkill, setCustomTeachSkill] = useState('');
+  const [isGeneratingCustomPlan, setIsGeneratingCustomPlan] = useState(false);
+
   const [allMessages, setAllMessages] = useState<{ [pairId: string]: Message[] }>(initialMessages);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
@@ -360,7 +363,7 @@ const App: React.FC = () => {
   const handleCompleteOnboarding = (e: React.FormEvent) => {
     e.preventDefault();
     const newUser: User = {
-      id: 'u-custom', name: formData.name || 'New Student', avatar: `https://picsum.photos/seed/${formData.name}/200/200`, knows: formData.knows.split(',').map(s => s.trim()).filter(Boolean), wants: formData.wants.split(',').map(s => s.trim()).filter(Boolean), credits: 5, bio: formData.bio || 'Eager to learn and share knowledge.', redeemedResources: []
+      id: 'u-custom', name: formData.name || 'New Student', avatar: `https://picsum.photos/seed/${formData.name}/200/200`, knows: formData.knows.split(',').map(s => s.trim()).filter(Boolean), wants: formData.wants.split(',').map(s => s.trim()).filter(Boolean), credits: 5, bio: formData.bio || 'Eager to learn and share knowledge.', redeemedResources: [], purchaseHistory: []
     };
     setUser(newUser); setIsOnboarding(false); setIsTutorialActive(true); showNotification(`Welcome to SkillVerse, ${newUser.name}!`);
   };
@@ -383,10 +386,34 @@ const App: React.FC = () => {
     showNotification(`Lesson plan ready for ${request.studentName}!`);
   };
 
+  const handleCustomTeach = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customTeachSkill.trim()) return;
+    setIsGeneratingCustomPlan(true);
+    const plan = await generateLessonPlan(customTeachSkill);
+    setSelectedLesson({ skill: customTeachSkill, plan: plan || "No plan generated." });
+    setCustomTeachSkill('');
+    setIsGeneratingCustomPlan(false);
+    showNotification(`New curriculum generated for ${customTeachSkill}!`);
+  };
+
   const handleConfirmPurchase = () => {
     if (!confirmingResource) return;
     if (user.credits < confirmingResource.cost) { showNotification("Insufficient credits! Host a session to earn more."); setConfirmingResource(null); return; }
-    setUser(prev => ({ ...prev, credits: prev.credits - confirmingResource.cost, redeemedResources: [...prev.redeemedResources, confirmingResource.id] }));
+    
+    const record: RedemptionRecord = {
+      resourceId: confirmingResource.id,
+      timestamp: Date.now(),
+      cost: confirmingResource.cost
+    };
+
+    setUser(prev => ({ 
+      ...prev, 
+      credits: prev.credits - confirmingResource.cost, 
+      redeemedResources: [...prev.redeemedResources, confirmingResource.id],
+      purchaseHistory: [record, ...prev.purchaseHistory]
+    }));
+    
     showNotification(`Unlocked: ${confirmingResource.title}. Added to your study vault.`);
     setConfirmingResource(null);
   };
@@ -442,28 +469,98 @@ const App: React.FC = () => {
           </div>
           <div className="flex flex-wrap justify-center md:justify-start gap-4">
             <div className="bg-white/10 px-6 py-3 rounded-2xl backdrop-blur-md">
-              <span className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-1">Knowledge</span>
-              <div className="flex gap-2">{profile.knows.map(s => <SkillBadge key={s} label={s} variant="knows" />)}</div>
+              <span className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-1">SkillCredits</span>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-black text-indigo-400">{profile.credits}💎</span>
+              </div>
             </div>
             <div className="bg-white/10 px-6 py-3 rounded-2xl backdrop-blur-md">
-              <span className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-1">Wants</span>
-              <div className="flex gap-2">{profile.wants.map(s => <SkillBadge key={s} label={s} variant="wants" />)}</div>
+              <span className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-1">Matches Found</span>
+              <span className="text-lg font-black">{matches.length} Peers</span>
             </div>
           </div>
-          {profile.id !== user.id && (
+          {profile.id !== user.id ? (
             <button 
               onClick={() => startConversation(profile)}
               className="bg-[#a435f0] hover:bg-[#8710d8] text-white px-10 py-5 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-2xl shadow-[#a435f0]/30 hover:-translate-y-1"
             >
               Send Message
             </button>
+          ) : (
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setProfileTab('overview')}
+                className={`px-8 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all ${profileTab === 'overview' ? 'bg-white text-slate-900' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
+              >
+                Profile Overview
+              </button>
+              <button 
+                onClick={() => setProfileTab('history')}
+                className={`px-8 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all ${profileTab === 'history' ? 'bg-white text-slate-900' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
+              >
+                Redemption History
+              </button>
+            </div>
           )}
         </div>
         <div className="absolute top-0 right-0 w-96 h-96 bg-[#a435f0] opacity-10 blur-[120px] rounded-full"></div>
       </div>
       
+      {profileTab === 'overview' ? (
+        <div className="grid md:grid-cols-2 gap-12 animate-fade-in">
+          <div className="space-y-6">
+            <h3 className="text-2xl font-black text-slate-900">Knowledge Base</h3>
+            <div className="bg-white p-10 rounded-[32px] border-2 border-slate-50 shadow-sm flex flex-wrap gap-3">
+              {profile.knows.map(s => <SkillBadge key={s} label={s} variant="knows" />)}
+            </div>
+          </div>
+          <div className="space-y-6">
+            <h3 className="text-2xl font-black text-slate-900">Eager to Learn</h3>
+            <div className="bg-white p-10 rounded-[32px] border-2 border-slate-50 shadow-sm flex flex-wrap gap-3">
+              {profile.wants.map(s => <SkillBadge key={s} label={s} variant="wants" />)}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="animate-fade-in space-y-8">
+          <h3 className="text-2xl font-black text-slate-900">Learning Ledger</h3>
+          <div className="bg-white rounded-[32px] border-2 border-slate-50 shadow-sm overflow-hidden">
+            {profile.purchaseHistory.length > 0 ? (
+              <div className="divide-y divide-slate-50">
+                {profile.purchaseHistory.map((record, i) => {
+                  const resource = allResources.find(r => r.id === record.resourceId);
+                  if (!resource) return null;
+                  return (
+                    <div key={i} className="p-8 flex items-center justify-between group hover:bg-slate-50/50 transition-colors">
+                      <div className="flex items-center gap-6">
+                        <div className="w-16 h-10 rounded-xl overflow-hidden bg-slate-100">
+                          <img src={resource.thumbnail} className="w-full h-full object-cover" />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-slate-900 group-hover:text-[#a435f0] transition-colors">{resource.title}</h4>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Unlocked on {new Date(record.timestamp).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-black text-indigo-600">-{record.cost}💎</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-20 text-center space-y-6">
+                <div className="text-6xl opacity-10">🏛️</div>
+                <p className="font-black uppercase tracking-[0.2em] text-slate-300 text-sm">You haven't unlocked any content yet</p>
+                <button onClick={() => setActiveTab('vault')} className="px-8 py-3 bg-slate-900 text-white font-black rounded-xl text-[10px] uppercase tracking-widest hover:bg-[#a435f0] transition-all">Browse Library</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
       <button 
-        onClick={() => setViewingProfile(null)}
+        onClick={() => { setViewingProfile(null); setProfileTab('overview'); }}
         className="text-slate-400 hover:text-slate-900 font-black text-xs uppercase tracking-widest flex items-center gap-2 group"
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -592,9 +689,39 @@ const App: React.FC = () => {
                 {activeTab === 'teach' && (
                   <section className="space-y-12">
                     <div className="bg-[#1c1d1f] text-white p-16 rounded-[40px] shadow-3xl relative overflow-hidden group"><h1 className="text-5xl font-black mb-6 relative z-10 leading-tight">Empower peers, <br /><span className="bg-gradient-to-r from-[#a435f0] to-[#c084fc] bg-clip-text text-transparent underline decoration-white/20 underline-offset-8">Fund your growth.</span></h1><p className="text-xl opacity-70 max-w-2xl font-medium relative z-10">Every session you host earns you SkillCredits. Use them to unlock the community's highest-rated educational archives.</p><div className="absolute -bottom-20 -right-20 w-[400px] h-[400px] bg-[#a435f0]/20 rounded-full blur-[100px] group-hover:scale-110 transition-transform duration-1000"></div></div>
+                    
                     <div className="grid lg:grid-cols-3 gap-12">
-                      <div className={`lg:col-span-2 space-y-6 transition-all ${isTutorialActive && tutorialStep === 2 ? 'ring-4 ring-[#a435f0] ring-offset-8 rounded-[40px] p-4 bg-slate-50' : ''}`}><div className="flex items-center justify-between mb-4"><h2 className="text-2xl font-black text-slate-900 tracking-tight">Urgent Requests</h2><span className="bg-slate-100 text-slate-500 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full">Updated 1m ago</span></div>{requests.map(req => (<div key={req.id} className="border-2 border-slate-50 p-10 rounded-[32px] flex items-center justify-between hover:bg-slate-50 transition-all group shadow-sm hover:shadow-xl"><div className="flex items-center gap-6"><div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-[#a435f0] flex items-center justify-center font-black text-white rounded-2xl text-2xl shadow-lg">{req.studentName.charAt(0)}</div><div><h4 className="font-black text-slate-900 text-xl">{req.studentName}</h4><p className="text-base text-slate-500 font-medium">Needs help with <span className="text-[#a435f0] font-black underline decoration-[#a435f0]/20 underline-offset-4">#{req.skillNeeded}</span></p></div></div><div className="flex items-center gap-12"><div className="text-right"><span className="text-3xl font-black text-indigo-600">{req.reward}💎</span><p className="text-[10px] text-slate-300 font-black uppercase tracking-widest mt-1">Reward</p></div><button onClick={() => handleTeach(req)} className="bg-slate-900 text-white px-10 py-4 font-black text-xs uppercase tracking-[0.2em] hover:bg-[#a435f0] rounded-2xl transition-all shadow-xl hover:-translate-y-1">Accept</button></div></div>))}</div>
-                      <div className="bg-white border-2 border-slate-50 p-10 rounded-[40px] shadow-sm h-fit space-y-8 sticky top-24"><div className="flex items-center justify-between"><h3 className="text-xl font-black text-slate-900">AI Tutor</h3><span className="w-3 h-3 bg-[#a435f0] rounded-full animate-ping"></span></div>{selectedLesson ? (<div className="space-y-8 animate-fade-in"><div className="bg-slate-50 p-8 border-2 border-slate-100 rounded-3xl text-sm leading-relaxed max-h-[450px] overflow-y-auto whitespace-pre-wrap font-medium text-slate-600 shadow-inner">{selectedLesson.plan}</div><div className="grid gap-4"><button onClick={() => completeTeaching(3)} className="w-full py-5 bg-[#a435f0] text-white font-black rounded-2xl hover:bg-[#8710d8] shadow-2xl shadow-[#a435f0]/20 transition-all uppercase text-[11px] tracking-[0.2em]">Complete Session</button><button onClick={handleSharePlan} disabled={isPublishing} className="w-full py-5 bg-white border-2 border-slate-900 font-black hover:bg-slate-50 text-[11px] rounded-2xl disabled:opacity-50 uppercase tracking-[0.2em]">{isPublishing ? "Publishing..." : "Share & Earn 💎"}</button></div></div>) : <div className="text-center py-24 text-slate-300 space-y-6"><div className="text-7xl opacity-20 transform hover:scale-110 transition-transform cursor-default">⚡</div><p className="text-sm font-black uppercase tracking-[0.2em] max-w-[200px] mx-auto leading-relaxed">Accept a request to ignite the AI curriculum generator.</p></div>}</div>
+                      <div className={`lg:col-span-2 space-y-6 transition-all ${isTutorialActive && tutorialStep === 2 ? 'ring-4 ring-[#a435f0] ring-offset-8 rounded-[40px] p-4 bg-slate-50' : ''}`}>
+                        
+                        {/* New Feature: Manual Lesson Plan Generation */}
+                        <div className="bg-white border-2 border-dashed border-slate-200 p-10 rounded-[32px] mb-10 transition-all hover:border-[#a435f0]/50">
+                          <h3 className="text-xl font-black text-slate-900 mb-6">Want to teach something specific?</h3>
+                          <form onSubmit={handleCustomTeach} className="flex flex-col sm:flex-row gap-4">
+                            <input 
+                              type="text" 
+                              placeholder="Enter a skill (e.g. Docker, Photography...)" 
+                              className="flex-1 bg-slate-50 border-2 border-slate-50 rounded-2xl px-6 py-4 text-sm focus:border-[#a435f0] focus:bg-white outline-none transition-all font-medium"
+                              value={customTeachSkill}
+                              onChange={(e) => setCustomTeachSkill(e.target.value)}
+                            />
+                            <button 
+                              type="submit" 
+                              disabled={isGeneratingCustomPlan || !customTeachSkill.trim()}
+                              className="bg-[#a435f0] text-white px-10 py-4 font-black text-xs uppercase tracking-widest hover:bg-[#8710d8] rounded-2xl transition-all shadow-lg shadow-[#a435f0]/20 disabled:opacity-50 whitespace-nowrap"
+                            >
+                              {isGeneratingCustomPlan ? "Generating..." : "Generate Lesson Plan"}
+                            </button>
+                          </form>
+                        </div>
+
+                        <div className="flex items-center justify-between mb-4">
+                          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Urgent Requests</h2>
+                          <span className="bg-slate-100 text-slate-500 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full">Updated 1m ago</span>
+                        </div>
+                        {requests.map(req => (<div key={req.id} className="border-2 border-slate-50 p-10 rounded-[32px] flex items-center justify-between hover:bg-slate-50 transition-all group shadow-sm hover:shadow-xl"><div className="flex items-center gap-6"><div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-[#a435f0] flex items-center justify-center font-black text-white rounded-2xl text-2xl shadow-lg">{req.studentName.charAt(0)}</div><div><h4 className="font-black text-slate-900 text-xl">{req.studentName}</h4><p className="text-base text-slate-500 font-medium">Needs help with <span className="text-[#a435f0] font-black underline decoration-[#a435f0]/20 underline-offset-4">#{req.skillNeeded}</span></p></div></div><div className="flex items-center gap-12"><div className="text-right"><span className="text-3xl font-black text-indigo-600">{req.reward}💎</span><p className="text-[10px] text-slate-300 font-black uppercase tracking-widest mt-1">Reward</p></div><button onClick={() => handleTeach(req)} className="bg-slate-900 text-white px-10 py-4 font-black text-xs uppercase tracking-[0.2em] hover:bg-[#a435f0] rounded-2xl transition-all shadow-xl hover:-translate-y-1">Accept</button></div></div>))}
+                      </div>
+
+                      <div className="bg-white border-2 border-slate-50 p-10 rounded-[40px] shadow-sm h-fit space-y-8 sticky top-24"><div className="flex items-center justify-between"><h3 className="text-xl font-black text-slate-900">AI Tutor</h3><span className="w-3 h-3 bg-[#a435f0] rounded-full animate-ping"></span></div>{selectedLesson ? (<div className="space-y-8 animate-fade-in"><div className="bg-slate-50 p-8 border-2 border-slate-100 rounded-3xl text-sm leading-relaxed max-h-[450px] overflow-y-auto whitespace-pre-wrap font-medium text-slate-600 shadow-inner">{selectedLesson.plan}</div><div className="grid gap-4"><button onClick={() => completeTeaching(3)} className="w-full py-5 bg-[#a435f0] text-white font-black rounded-2xl hover:bg-[#8710d8] shadow-2xl shadow-[#a435f0]/30 transition-all uppercase text-[11px] tracking-[0.2em]">Complete Session</button><button onClick={handleSharePlan} disabled={isPublishing} className="w-full py-5 bg-white border-2 border-slate-900 font-black hover:bg-slate-50 text-[11px] rounded-2xl disabled:opacity-50 uppercase tracking-[0.2em]">{isPublishing ? "Publishing..." : "Share & Earn 💎"}</button></div></div>) : <div className="text-center py-24 text-slate-300 space-y-6"><div className="text-7xl opacity-20 transform hover:scale-110 transition-transform cursor-default">⚡</div><p className="text-sm font-black uppercase tracking-[0.2em] max-w-[200px] mx-auto leading-relaxed">Accept a request or enter a skill above to ignite the AI curriculum generator.</p></div>}</div>
                     </div>
                   </section>
                 )}

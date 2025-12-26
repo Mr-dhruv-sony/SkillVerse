@@ -7,7 +7,14 @@ export interface User {
   wants: string[];
   credits: number;
   bio: string;
-  redeemedResources: string[]; // List of IDs the user has purchased
+  redeemedResources: string[]; // List of IDs for quick lookup
+  purchaseHistory: RedemptionRecord[]; // Detailed history
+}
+
+export interface RedemptionRecord {
+  resourceId: string;
+  timestamp: number;
+  cost: number;
 }
 
 export interface Match {

@@ -8,7 +8,8 @@ export const currentUser: User = {
   wants: ['Java', 'React', 'TypeScript'],
   credits: 10,
   bio: 'Computer Science student passionate about data and backend development.',
-  redeemedResources: []
+  redeemedResources: [],
+  purchaseHistory: []
 };
 
 export const peers: User[] = [
@@ -20,7 +21,8 @@ export const peers: User[] = [
     wants: ['Python', 'Machine Learning'],
     credits: 12,
     bio: 'Looking to transition from Java enterprise to AI.',
-    redeemedResources: []
+    redeemedResources: [],
+    purchaseHistory: []
   },
   {
     id: 'u3',
@@ -30,7 +32,8 @@ export const peers: User[] = [
     wants: ['Python', 'Node.js'],
     credits: 8,
     bio: 'UI designer diving into full-stack development.',
-    redeemedResources: []
+    redeemedResources: [],
+    purchaseHistory: []
   },
   {
     id: 'u4',
@@ -40,7 +43,8 @@ export const peers: User[] = [
     wants: ['SQL', 'React'],
     credits: 15,
     bio: 'DevOps enthusiast wanting to learn some frontend.',
-    redeemedResources: []
+    redeemedResources: [],
+    purchaseHistory: []
   }
 ];
 
